@@ -1,5 +1,6 @@
 # Real-Time-Memory-Allocation-Tracker.
 This project visualizes memory allocation in real-time, demonstrating paging and segmentation techniques. It tracks memory usage dynamically, displaying allocation and deallocation processes. The tool helps understand OS memory management by providing an interactive and graphical representation.
+
 INTRODUCTION TO OPERATING SYSTEM
 An Operating System (OS) is a software that acts as an intermediary between computer hardware and computer software. It provides a user-friendly interface and enables the efficient functioning of the computer by managing hardware resources, executing applications, and ensuring that different software programs and users can run simultaneously without interfering with each other.
 
