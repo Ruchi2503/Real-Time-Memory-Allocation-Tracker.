@@ -1,0 +1,118 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <pthread.h>
+
+typedef struct allocation_info {
+    void* ptr;
+    size_t size;
+    const char* file;
+    int line;
+    struct allocation_info* next;
+} allocation_info;
+
+static allocation_info* allocations = NULL;
+static pthread_mutex_t alloc_mutex = PTHREAD_MUTEX_INITIALIZER;
+static size_t total_allocated = 0;
+static size_t peak_allocated = 0;
+static size_t allocation_count = 0;
+
+void* tracked_malloc(size_t size, const char* file, int line) {
+    void* ptr = malloc(size);
+    if (!ptr) return NULL;
+    
+    allocation_info* info = (allocation_info*)malloc(sizeof(allocation_info));
+    if (!info) {
+        free(ptr);
+        return NULL;
+    }
+    
+    info->ptr = ptr;
+    info->size = size;
+    info->file = file;
+    info->line = line;
+    
+    pthread_mutex_lock(&alloc_mutex);
+    
+    info->next = allocations;
+    allocations = info;
+    total_allocated += size;
+    allocation_count++;
+    
+    if (total_allocated > peak_allocated) {
+        peak_allocated = total_allocated;
+    }
+    
+    pthread_mutex_unlock(&alloc_mutex);
+    
+    return ptr;
+}
+
+void tracked_free(void* ptr) {
+    if (!ptr) return;
+    
+    pthread_mutex_lock(&alloc_mutex);
+    
+    allocation_info** prev = &allocations;
+    allocation_info* current = allocations;
+    
+    while (current) {
+        if (current->ptr == ptr) {
+            *prev = current->next;
+            total_allocated -= current->size;
+            allocation_count--;
+            free(current);
+            break;
+        }
+        prev = &current->next;
+        current = current->next;
+    }
+    
+    pthread_mutex_unlock(&alloc_mutex);
+    
+    free(ptr);
+}
+
+void print_memory_stats() {
+    pthread_mutex_lock(&alloc_mutex);
+    
+    time_t now;
+    time(&now);
+    printf("\nMemory Stats at %s", ctime(&now));
+    printf("Current allocations: %zu\n", allocation_count);
+    printf("Total allocated: %zu bytes\n", total_allocated);
+    printf("Peak allocation: %zu bytes\n", peak_allocated);
+    
+    // Print all active allocations
+    allocation_info* current = allocations;
+    while (current) {
+        printf("  %p: %zu bytes allocated at %s:%d\n", 
+               current->ptr, current->size, current->file, current->line);
+        current = current->next;
+    }
+    
+    pthread_mutex_unlock(&alloc_mutex);
+}
+
+// Redefine standard functions to use our tracked versions
+#define malloc(size) tracked_malloc(size, _FILE, __LINE_)
+#define free(ptr) tracked_free(ptr)
+
+// Example usage
+int main() {
+    int* arr = (int*)malloc(100 * sizeof(int));
+    char* str = (char*)malloc(50);
+    
+    print_memory_stats();
+    
+    free(arr);
+    
+    print_memory_stats();
+    
+    free(str);
+    
+    print_memory_stats();
+    
+    return 0;
+}
